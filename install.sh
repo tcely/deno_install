@@ -43,7 +43,7 @@ extract_with_unzip_binary() (
 
 	chmod +x deno
 	./deno -V >/dev/null 2>&1
-	mv ../deno ../.removed.deno.$$
+	test '!' -f ../deno || mv ../deno ../.removed.deno.$$
 	mv deno ../deno
 	rm -f file.zip ../.removed.deno.$$
 	cd ..
