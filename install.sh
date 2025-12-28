@@ -4,15 +4,21 @@
 
 set -e
 
+find_sum_binary() {
+	for cmd in busybox busybox-static sha256sum; do
+		command -v "${cmd}" && break
+	done; unset -v cmd ;
+}
+
 find_unzip_binary() {
-    for cmd in busybox busybox-static unzip 7z 7za 7zz bsdtar sqlite3; do
-	    command -v "${cmd}" && break
+	for cmd in busybox busybox-static unzip 7z 7za 7zz bsdtar sqlite3; do
+    	command -v "${cmd}" && break
 	done; unset -v cmd ;
 }
 
 check_unzip_binary() {
-    case "${1}" in
-	    (*/busybox*) "${1}" unzip --help >/dev/null 2>&1 ;;
+	case "${1}" in
+		(*/busybox*) "${1}" unzip --help >/dev/null 2>&1 ;;
 		(*/unzip*) return 0 ;;
 		(*/7z*) return 0 ;;
 		(*/bsdtar*) return 0 ;;
@@ -22,19 +28,32 @@ check_unzip_binary() {
 }
 
 extract_with_unzip_binary() (
-    # destination_directory binary_path
-    dir="$(realpath -e "${1}")"
+	# destination_directory binary_path
+	dir="$(realpath -e "${1}")"
 	shift
 	cmd="${1}"
+	shift
+	digest="${1}"
 	shift
 
 	set -eu
 	work_dir="$(mktemp -d -t -p "${dir}" .tmp.deno.XXXXXXXX)" && \
-	    trap "rm -v -rf -- '${work_dir}'" EXIT
+		trap "rm -v -rf -- '${work_dir}'" EXIT
 	cd "${work_dir}"
 	cat > file.zip
+
+	if [ -n "${digest}" ]; then
+		printf >> SUMS -- '%s *file.zip' "${digest}"
+		sum_cmd="$(find_sum_binary)"
+		case "${sum_cmd}" in
+			(*/busybox*) "${sum_cmd}" sha256sum -cs SUMS ;;
+			(*/sha256sum) "${sum_cmd}" --status -c SUMS ;;
+			(*) false ;;
+		esac
+		rm SUMS
+	fi
 	case "${cmd}" in
-	    (*/busybox*) "${cmd}" unzip file.zip ;;
+		(*/busybox*) "${cmd}" unzip file.zip ;;
 		(*/unzip*) "${cmd}" file.zip ;;
 		(*/7z*) "${cmd}" x file.zip ;;
 		(*/bsdtar*) "${cmd}" -xf file.zip ;;
@@ -59,11 +78,12 @@ fi
 if [ "$OS" = "Windows_NT" ]; then
 	target="x86_64-pc-windows-msvc"
 else
-	case $(uname -sm) in
+	case "$(uname -sm)" in
 	"Darwin x86_64") target="x86_64-apple-darwin" ;;
 	"Darwin arm64") target="aarch64-apple-darwin" ;;
 	"Linux aarch64") target="aarch64-unknown-linux-gnu" ;;
-	*) target="x86_64-unknown-linux-gnu" ;;
+	"Linux x86_64") target="x86_64-unknown-linux-gnu" ;;
+	*) echo "Error: unsupported target: $(uname -sm)" 1>&2 ; exit 1 ;;
 	esac
 fi
 
@@ -123,8 +143,9 @@ if [ ! -d "$bin_dir" ]; then
 	mkdir -p "$bin_dir"
 fi
 
-curl --fail --location --progress-bar "${deno_uri}" | \
-    extract_with_unzip_binary "${bin_dir}" "${extract_cmd}"
+curl --fail --location --progress-bar -- "${deno_uri}" | \
+	extract_with_unzip_binary "${bin_dir}" "${extract_cmd}" \
+	$(curl --fail --location -- "${deno_uri}.sha256sum")
 if $exe eval 'const [major, minor] = Deno.version.deno.split(".").map(Number); if (major < 2 || (major === 2 && minor < 6)) Deno.exit(1)'; then
 	"$exe" x --install-alias
 	# shellcheck disable=SC2016
