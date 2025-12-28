@@ -4,17 +4,11 @@
 
 set -e
 
-find_sum_binary() {
-	for cmd in busybox busybox-static sha256sum shasum; do
+find_binary() (
+	for cmd in "$@"; do
 		command -v "${cmd}" && break
-	done; unset -v cmd ;
-}
-
-find_unzip_binary() {
-	for cmd in busybox busybox-static unzip 7z 7za 7zz bsdtar sqlite3; do
-    	command -v "${cmd}" && break
-	done; unset -v cmd ;
-}
+	done
+)
 
 check_unzip_binary() {
 	case "${1}" in
@@ -44,7 +38,7 @@ extract_with_unzip_binary() (
 
 	if [ -n "${digest}" ]; then
 		printf >> SUMS -- '%s *file.zip' "${digest}"
-		sum_cmd="$(find_sum_binary)"
+		sum_cmd="$(find_binary busybox busybox-static sha256sum shasum)"
 		case "${sum_cmd}" in
 			(*/busybox*) "${sum_cmd}" sha256sum -cw SUMS ;;
 			(*/sha256sum) "${sum_cmd}" --strict -cw SUMS ;;
@@ -70,7 +64,7 @@ extract_with_unzip_binary() (
 	rmdir "${work_dir}"
 )
 
-extract_cmd="$(find_unzip_binary)"
+extract_cmd="$(find_binary busybox busybox-static unzip 7z 7za 7zz bsdtar sqlite3)"
 if ! check_unzip_binary "${extract_cmd}"; then
 	echo "Error: either unzip or 7z is required to install Deno (see: https://github.com/denoland/deno_install#either-unzip-or-7z-is-required )." 1>&2
 	exit 1
