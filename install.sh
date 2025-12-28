@@ -4,7 +4,54 @@
 
 set -e
 
-if ! command -v unzip >/dev/null && ! command -v 7z >/dev/null; then
+find_unzip_binary() {
+    for cmd in busybox busybox-static unzip 7z 7za 7zz bsdtar sqlite3; do
+	    command -v "${cmd}" && break
+	done; unset -v cmd ;
+}
+
+check_unzip_binary() {
+    case "${1}" in
+	    (*/busybox*) "${1}" unzip --help >/dev/null 2>&1 ;;
+		(*/unzip*) return 0 ;;
+		(*/7z*) return 0 ;;
+		(*/bsdtar*) return 0 ;;
+		(*/sqlite3) "${1}" -A -nc >/dev/null 2>&1 ;;
+		(*) return 1 ;;
+	esac
+}
+
+extract_with_unzip_binary() (
+    # destination_directory binary_path
+    dir="$(realpath -e "${1}")"
+	shift
+	cmd="${1}"
+	shift
+
+	set -eu
+	work_dir="$(mktemp -d -t -p "${dir}" .tmp.deno.XXXXXXXX)" && \
+	    trap "rm -v -rf -- '${work_dir}'" EXIT
+	cd "${work_dir}"
+	cat > file.zip
+	case "${cmd}" in
+	    (*/busybox*) "${cmd}" unzip file.zip ;;
+		(*/unzip*) "${cmd}" file.zip ;;
+		(*/7z*) "${cmd}" x file.zip ;;
+		(*/bsdtar*) "${cmd}" -xf file.zip ;;
+		(*/sqlite3) "${cmd}" -A -xf file.zip ;;
+	esac
+
+	chmod +x deno
+	./deno -V >/dev/null 2>&1
+	mv ../deno ../.removed.deno.$$
+	mv deno ../deno
+	rm -f file.zip ../.removed.deno.$$
+	cd ..
+	rmdir "${work_dir}"
+)
+
+extract_cmd="$(find_unzip_binary)"
+if ! check_unzip_binary "${extract_cmd}"; then
 	echo "Error: either unzip or 7z is required to install Deno (see: https://github.com/denoland/deno_install#either-unzip-or-7z-is-required )." 1>&2
 	exit 1
 fi
@@ -76,14 +123,8 @@ if [ ! -d "$bin_dir" ]; then
 	mkdir -p "$bin_dir"
 fi
 
-curl --fail --location --progress-bar --output "$exe.zip" "$deno_uri"
-if command -v unzip >/dev/null; then
-	unzip -d "$bin_dir" -o "$exe.zip"
-else
-	7z x -o"$bin_dir" -y "$exe.zip"
-fi
-chmod +x "$exe"
-rm "$exe.zip"
+curl --fail --location --progress-bar "${deno_uri}" | \
+    extract_with_unzip_binary "${bin_dir}" "${extract_cmd}"
 if $exe eval 'const [major, minor] = Deno.version.deno.split(".").map(Number); if (major < 2 || (major === 2 && minor < 6)) Deno.exit(1)'; then
 	"$exe" x --install-alias
 	# shellcheck disable=SC2016
