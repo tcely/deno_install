@@ -38,11 +38,15 @@ extract_with_unzip_binary() (
 
 	if [ -n "${digest}" ]; then
 		printf >> SUMS -- '%s *file.zip' "${digest}"
-		sum_cmd="$(find_binary busybox busybox-static sha256sum shasum)"
+		sum_cmd="$(find_binary openssl busybox busybox-static sha256sum shasum openssl)"
 		case "${sum_cmd}" in
 			(*/busybox*) "${sum_cmd}" sha256sum -cw SUMS ;;
 			(*/sha256sum) "${sum_cmd}" --strict -cw SUMS ;;
 			(*/shasum) "${sum_cmd}" -a 256 -cw SUMS ;;
+			(*/openssl)
+				output="$("${sum_cmd}" dgst -sha256 -r file.zip | cat - SUMS | uniq -ui)" &&
+				[ "${output:-matched}" = "matched" ] && printf -- 'file.zip: OK\n'
+				;;
 			(*) false ;;
 		esac
 		rm SUMS
