@@ -5,7 +5,7 @@
 set -e
 
 find_sum_binary() {
-	for cmd in busybox busybox-static sha256sum; do
+	for cmd in busybox busybox-static sha256sum shasum; do
 		command -v "${cmd}" && break
 	done; unset -v cmd ;
 }
@@ -48,6 +48,7 @@ extract_with_unzip_binary() (
 		case "${sum_cmd}" in
 			(*/busybox*) "${sum_cmd}" sha256sum -cw SUMS ;;
 			(*/sha256sum) "${sum_cmd}" --strict -cw SUMS ;;
+			(*/shasum) "${sum_cmd}" -a 256 -cw SUMS ;;
 			(*) false ;;
 		esac
 		rm SUMS
