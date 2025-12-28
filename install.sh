@@ -15,6 +15,7 @@ check_unzip_binary() {
 	*/busybox*) "${1}" unzip --help >/dev/null 2>&1 ;;
 	*/unzip*) return 0 ;;
 	*/7z*) return 0 ;;
+	*/miniunz*) return 0 ;;
 	*/bsdtar*) return 0 ;;
 	*/sqlite3) "${1}" -A -nc >/dev/null 2>&1 ;;
 	*/tar) return 0 ;;
@@ -32,9 +33,11 @@ extract_with_unzip_binary() (
 	digest="${1}"
 
 	set -eu
-	# shellcheck disable=SC2064
+	_cleanup_extract() { :; }
+	__exit_trap() { _cleanup_extract; stuck_message; }
+	trap "__exit_trap" EXIT
 	work_dir="$(mktemp -d "${dir}"/.tmp.deno.XXXXXXXX)" &&
-		trap "rm -v -rf -- '${work_dir}'" EXIT
+		_cleanup_extract() { rm -v -rf "${work_dir}"; }
 	cd "${work_dir}"
 	cat >file.zip
 
@@ -61,21 +64,29 @@ extract_with_unzip_binary() (
 	*/busybox*) "${cmd}" unzip file.zip ;;
 	*/unzip*) "${cmd}" file.zip ;;
 	*/7z*) "${cmd}" x file.zip ;;
+	*/miniunz*) "${cmd}" -x file.zip ;;
 	*/bsdtar*) "${cmd}" -xf file.zip ;;
 	*/sqlite3) "${cmd}" -A -xf file.zip ;;
 	*/tar) "${cmd}" -xf file.zip ;;
 	esac
+	rm -f file.zip
 
 	chmod +x deno
 	./deno -V >/dev/null 2>&1
 	test '!' -f ../deno || mv ../deno ../.removed.deno.$$
-	mv deno ../deno
-	rm -f file.zip ../.removed.deno.$$
+	install -t .. deno
+	rm -f deno ../.removed.deno.$$
+	__exit_trap() { _cleanup_extract; }
 	cd ..
 	rmdir "${work_dir}"
 )
 
-extract_cmd="$(find_binary busybox busybox-static unzip 7z 7za 7zz bsdtar sqlite3 tar)"
+stuck_message() {
+	printf -- '%s\n' '' 'Stuck? Join our Discord https://discord.gg/deno'
+}
+__exit_trap() { stuck_message; }
+trap '__exit_trap' EXIT
+extract_cmd="$(find_binary busybox busybox-static unzip 7z 7za 7zz bsdtar sqlite3 miniunzip miniunz tar)"
 if ! check_unzip_binary "${extract_cmd}"; then
 	echo "Error: either unzip or 7z is required to install Deno (see: https://github.com/denoland/deno_install#either-unzip-or-7z-is-required )." 1>&2
 	exit 1
@@ -148,12 +159,7 @@ deno_install="${DENO_INSTALL:-${HOME}/.deno}"
 bin_dir="${DENO_INSTALL:-${HOME}/.local}/bin"
 exe="${bin_dir}/deno"
 
-if [ ! -d "${deno_install}" ]; then
-	mkdir -p "${deno_install}"
-fi
-if [ ! -d "${bin_dir}" ]; then
-	mkdir -p "${bin_dir}"
-fi
+mkdir -p "${deno_install}" "${bin_dir}"
 
 # shellcheck disable=SC2046
 curl --fail --location --progress-bar -- "${deno_uri}" |
@@ -198,5 +204,3 @@ if command -v deno >/dev/null; then
 else
 	echo "Run '${exe} --help' to get started"
 fi
-echo
-echo "Stuck? Join our Discord https://discord.gg/deno"
