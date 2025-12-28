@@ -38,7 +38,7 @@ extract_with_unzip_binary() (
 
 	if [ -n "${digest}" ]; then
 		printf >> SUMS -- '%s *file.zip' "${digest}"
-		sum_cmd="$(find_binary openssl busybox busybox-static sha256sum shasum openssl)"
+		sum_cmd="$(find_binary busybox busybox-static sha256sum shasum openssl)"
 		case "${sum_cmd}" in
 			(*/busybox*) "${sum_cmd}" sha256sum -cw SUMS ;;
 			(*/sha256sum) "${sum_cmd}" --strict -cw SUMS ;;
