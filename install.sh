@@ -46,8 +46,8 @@ extract_with_unzip_binary() (
 		printf >> SUMS -- '%s *file.zip' "${digest}"
 		sum_cmd="$(find_sum_binary)"
 		case "${sum_cmd}" in
-			(*/busybox*) "${sum_cmd}" sha256sum -cs SUMS ;;
-			(*/sha256sum) "${sum_cmd}" --status -c SUMS ;;
+			(*/busybox*) "${sum_cmd}" sha256sum -cw SUMS ;;
+			(*/sha256sum) "${sum_cmd}" --strict -cw SUMS ;;
 			(*) false ;;
 		esac
 		rm SUMS
